@@ -29,7 +29,7 @@
     "AzureWebJobsStorage": "<Azure Functions 既定の Azure Storage 接続文字列>",
     "AudioStorage": "<音声ファイル格納用 Azure Storage 接続文字列>",
     "CognitiveEndpoint": "wss://<カスタムドメイン名>.cognitiveservices.azure.com/stt/speech/recognition/conversation/cognitiveservices/v1",
-    CognitiveEndpointId": "<カスタムスピーチのエンドポイント ID>",
+    "CognitiveEndpointId": "<カスタムスピーチのエンドポイントID>",
     "CognitiveServiceApiKey": "<Cognitive.SpeechService API キー>",
     "FUNCTIONS_WORKER_RUNTIME": "dotnet"
   },
