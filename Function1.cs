@@ -57,84 +57,88 @@ namespace Azure_Functions_SpeechToText_DotNET_App
          */
         private static void Audio2Text(string tempfile, ILogger log)
         {
-            FileStream fs;
-            try {
-                fs = File.OpenWrite(tempfile + ".txt");
-            } catch(Exception ex) {
-                log.LogWarning(ex.Message);
-                return;
-            }
-
-            // Speech サービスへ接続
-            string key = System.Environment.GetEnvironmentVariable("CognitiveServiceApiKey");
-            string endPoint = System.Environment.GetEnvironmentVariable("CognitiveEndpoint");
-            Uri uriEndpoint;
-            try {
-                uriEndpoint = new Uri(endPoint);
-            }
-            catch (Exception ex) {
-                log.LogWarning(ex.Message);
-                return;
-            }
-
-            SpeechConfig speechConfig = SpeechConfig.FromEndpoint(uriEndpoint, key);
-            speechConfig.SpeechRecognitionLanguage = "ja-JP";
-            AudioConfig audioConfig = AudioConfig.FromWavFileInput(tempfile + ".wav");
-            SpeechRecognizer recognizer = new SpeechRecognizer(speechConfig, audioConfig);
-
-            // イベントタスクの同期用
-            var stopRecognition = new TaskCompletionSource<int>();
-
-            // 部分文字列の抽出毎に繰り返し呼ばれる
-            recognizer.Recognized += (s, e) =>
+            using (FileStream fs = File.OpenWrite(tempfile + ".txt"))
             {
-                if (e.Result.Reason == ResultReason.RecognizedSpeech) {
-                    String transcript = e.Result.Text;
-                    log.LogInformation("RECOGNIZED: Text=" + transcript);
-                    try {
-                        Byte[] info = new UTF8Encoding(true).GetBytes(transcript);
-                        fs.Write(info, 0, info.Length);
-                    }
-                    catch (Exception ex) {
-                        log.LogWarning(ex.Message);
-                    }
-                }
-                else if (e.Result.Reason == ResultReason.NoMatch) {
-                    log.LogInformation($"NOMATCH: Speech could not be recognized.");
-                }
-            };
-
-            // 途中で処理が完了したら呼ばれる
-            recognizer.Canceled += (s, e) =>
-            {
-                Console.WriteLine($"CANCELED: Reason={e.Reason}");
-
-                if (e.Reason == CancellationReason.Error)
+                // Speech サービスへ接続
+                string key = System.Environment.GetEnvironmentVariable("CognitiveServiceApiKey");
+                string endPoint = System.Environment.GetEnvironmentVariable("CognitiveEndpoint");
+                string endPointId = System.Environment.GetEnvironmentVariable("CognitiveEndpointId");
+                Uri uriEndpoint;
+                try
                 {
-                    log.LogInformation($"CANCELED: ErrorCode={e.ErrorCode}");
-                    log.LogInformation($"CANCELED: ErrorDetails={e.ErrorDetails}");
-                    log.LogInformation($"CANCELED: Did you update the subscription info?");
+                    uriEndpoint = new Uri(endPoint);
+                }
+                catch (Exception ex)
+                {
+                    log.LogWarning(ex.Message);
+                    return;
                 }
 
-                stopRecognition.TrySetResult(0);
-            };
+                // カスタムドメインを利用した場合のエンドポイント指定
+                SpeechConfig speechConfig = SpeechConfig.FromEndpoint(uriEndpoint, key);
+                // endPointId は、カスタムスピーチ利用の場合のみ指定
+                speechConfig.EndpointId = endPointId;
+                speechConfig.SpeechRecognitionLanguage = "ja-JP";
+                AudioConfig audioConfig = AudioConfig.FromWavFileInput(tempfile + ".wav");
+                SpeechRecognizer recognizer = new SpeechRecognizer(speechConfig, audioConfig);
 
-            // 最後まで完了したら呼ばれる
-            recognizer.SessionStopped += (s, e) =>
-            {
-                log.LogInformation("\n    Session stopped event.");
-                stopRecognition.TrySetResult(0);
-            };
+                // イベントタスクの同期用
+                var stopRecognition = new TaskCompletionSource<int>();
 
-            // 文字起こしの開始
-            recognizer.StartContinuousRecognitionAsync();
+                // 部分文字列の抽出毎に繰り返し呼ばれる
+                recognizer.Recognized += (s, e) =>
+                {
+                    if (e.Result.Reason == ResultReason.RecognizedSpeech)
+                    {
+                        String transcript = e.Result.Text;
+                        log.LogInformation("RECOGNIZED: Text=" + transcript);
+                        try
+                        {
+                            Byte[] info = new UTF8Encoding(true).GetBytes(transcript);
+                            fs.Write(info, 0, info.Length);
+                        }
+                        catch (Exception ex)
+                        {
+                            log.LogWarning(ex.Message);
+                        }
+                    }
+                    else if (e.Result.Reason == ResultReason.NoMatch)
+                    {
+                        log.LogInformation($"NOMATCH: Speech could not be recognized.");
+                    }
+                };
 
-            // Waits for completion. Use Task.WaitAny to keep the task rooted.
-            Task.WaitAny(new[] { stopRecognition.Task });
+                // 途中で処理が完了したら呼ばれる
+                recognizer.Canceled += (s, e) =>
+                {
+                    Console.WriteLine($"CANCELED: Reason={e.Reason}");
 
-            recognizer.Dispose();
-            audioConfig.Dispose();
-            fs.Close();
+                    if (e.Reason == CancellationReason.Error)
+                    {
+                        log.LogInformation($"CANCELED: ErrorCode={e.ErrorCode}");
+                        log.LogInformation($"CANCELED: ErrorDetails={e.ErrorDetails}");
+                        log.LogInformation($"CANCELED: Did you update the subscription info?");
+                    }
+
+                    stopRecognition.TrySetResult(0);
+                };
+
+                // 最後まで完了したら呼ばれる
+                recognizer.SessionStopped += (s, e) =>
+                {
+                    log.LogInformation("\n    Session stopped event.");
+                    stopRecognition.TrySetResult(0);
+                };
+
+                // 文字起こしの開始
+                recognizer.StartContinuousRecognitionAsync();
+
+                // Waits for completion. Use Task.WaitAny to keep the task rooted.
+                Task.WaitAny(new[] { stopRecognition.Task });
+
+                recognizer.Dispose();
+                audioConfig.Dispose();
+            }
         }
     }
 }
